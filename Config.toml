@@ -1,0 +1,39 @@
+[main]
+# Do not change
+version = "0.1.0"
+# SSL needs to be configured before secure can be set to true
+secure = false
+
+# File path of the certificate
+# cert_path = "./cert.pem"
+
+# Private key path of the certificate
+# private_key_path = "./private.pem"
+
+# All the services of the server
+features = [
+    "proxy", 
+    "proxy/json5",
+    
+    # Recommended
+    "proxy/json",
+    "storage",
+]
+
+[secret_config]
+# The path to the encrypted secrets file
+location = "./secrets"
+# Reset the private key every time the node is turned on. `private_key` must be null in the secrets file for this option to have any effect.
+# If turned off and `private_key` is null, the file will be edited with a random private key.
+restart_key = true
+# The password to unlock the secrets file. If null, you will be prompted to type the password when the node turns on.
+# password = ""
+
+[quic]
+address = "::/0"
+port = 56665
+
+[proxy]
+address = "::/0"
+# Change to 443 if using SSL
+port = 80
