@@ -1,6 +1,4 @@
-use std::{
-    error::Error,
-};
+use std::error::Error;
 
 use futures::{channel::mpsc, StreamExt};
 use quinn::{Endpoint, NewConnection, ServerConfig};
