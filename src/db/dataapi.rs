@@ -1,9 +1,3 @@
-
-
-
-
-
-
 pub trait DbApi {}
 pub struct Empty {}
 
