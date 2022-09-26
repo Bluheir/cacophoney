@@ -11,3 +11,5 @@ Cargo.lock
 
 # Debug configuration for vscode
 /.vscode/
+
+/secrets/
