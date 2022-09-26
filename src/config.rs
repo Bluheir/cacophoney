@@ -117,7 +117,7 @@ fn default_version() -> String {
     "0.1.0".to_string()
 }
 fn default_secret_location() -> String {
-    "./secrets".to_string()
+    "./secrets/secret".to_string()
 }
 fn default_restart_key() -> bool {
     true
@@ -148,7 +148,7 @@ features = [
 
 [secret_config]
 # The path to the encrypted secrets file
-location = "./secrets"
+location = "./secrets/secret"
 # Reset the private key every time the node is turned on. `private_key` must be null in the secrets file for this option to have any effect.
 # If turned off and `private_key` is null, the file will be edited with a random private key.
 restart_key = true
