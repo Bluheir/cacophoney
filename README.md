@@ -2,4 +2,4 @@
 A chat application that has all the features of Discord, but decentralized and more private. This repository is for a cacophoney node, which communicates with clients.
 
 ## License
-You can choose the [Apache 2.0](/LICENSE) or [MIT](/LICENSE-MIT) license.
+This work is licensed under the [Apache 2.0](/LICENSE) and the [MIT](/LICENSE-MIT) license.
