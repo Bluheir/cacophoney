@@ -1,20 +1,25 @@
-use aes_gcm::aead::{Aead};
+#![feature(let_chains)]
+
+use aes_gcm::aead::Aead;
 use aes_gcm::{aead::OsRng, Aes256Gcm};
 use aes_gcm::{Key, KeyInit};
 
+use futures::io::Cursor;
 use rand::RngCore;
 use std::{error::Error, time::Duration};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::time::sleep;
 use tokio::{
     fs::File,
-    io::{AsyncReadExt, AsyncWriteExt}
+    io::{AsyncReadExt, AsyncWriteExt},
 };
 use ui::{ActionExecution, InputChangeReq, SelectOption};
 
 use generic_array::GenericArray;
 
 use crate::config::{Configuration, SecretConfiguration};
+use crate::helpers::file::{encrypt, read_encrypted};
+use crate::helpers::hash_s;
 
 pub mod config;
 pub mod data;
@@ -45,7 +50,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let config = get_config().await?;
     let secrets = File::open(&config.secret_config.location).await;
 
-    let mut _f = match secrets {
+    let secrets = match secrets {
         Ok(mut f) => {
             log::debug!("Opening secrets file");
 
@@ -53,37 +58,43 @@ async fn main() -> Result<(), Box<dyn Error>> {
             f.read_to_end(&mut cipher).await?;
 
             let nonce = get_nonce().await?;
-            let nonce = GenericArray::from_slice(&nonce);
 
-            let mut decrypted_bytes = None;
+            let mut dec_config = None;
 
-            for i in 0..3 {
-                let passkey = listener
-                    .pass_key(
-                        format!(
-                            "Please type in the password to unlock the secrets file. ({}/3)",
-                            i + 1
+            match config.secret_config.password {
+                Some(p) => {
+                    let h = hash_s(&p);
+                    dec_config = read_encrypted::<SecretConfiguration>(&h, &nonce, &cipher)
+                        .await
+                        .ok();
+                }
+                // Config password is non-existant
+                _ => {}
+            }
+
+            if dec_config.is_none() {
+                // Start requesting the password
+                for i in 0..4 {
+                    let pass = listener
+                        .pass_hash(
+                            format!(
+                                "Please type in the password to unlock the secrets file. ({}/4)",
+                                i + 1
+                            ),
                         )
-                        .to_string(),
-                    )
-                    .await?;
+                        .await?;
 
-                let d = Aes256Gcm::new(&passkey);
-                let w = d.decrypt(nonce, cipher.as_slice());
+                    dec_config = read_encrypted(&pass, &nonce, &cipher).await.ok();
 
-                match w {
-                    Ok(v) => {
-                        decrypted_bytes = Some(v);
+                    // Password is correct and the decrypted file is serialized
+                    if dec_config.is_some() {
                         break;
                     }
-                    _ => {}
                 }
             }
 
-            match decrypted_bytes {
-                Some(v) => {
-                    let mut secret = serde_cbor::from_slice::<SecretConfiguration>(v.as_slice())?;
-
+            match dec_config {
+                Some(mut secret) => {
                     match secret.private_key {
                         None => {
                             secret.private_key =
@@ -123,21 +134,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
             if r == "Yes".to_string() {
                 let mut f = File::create(&config.secret_config.location).await?;
-                let passkey = listener
-                    .pass_key(
+                let pass = listener
+                    .pass_hash(
                         "Please type in the password for the secrets file. Type empty for none."
                             .to_string(),
                     )
                     .await?;
+
                 let s = serde_cbor::to_vec(&secret)?;
 
                 // Get or generate the nonce
                 let nonce = get_nonce().await?;
-                let nonce = GenericArray::from_slice(&nonce);
 
-                let d = Aes256Gcm::new(&passkey);
+                // Encrypt
+                let w = encrypt(&pass, &nonce, &secret).await?;
 
-                let w = d.encrypt(nonce, (s.as_slice()).as_ref()).unwrap();
                 f.write_all(&w).await?;
             }
 
@@ -148,6 +159,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
             secret
         }
     };
+
+    if config.main_config.secure &&
+        let Some(path) = config.main_config.cert_path &&
+        let Some(private_path) = config.main_config.private_key_path {
+
+        if let Ok(mut pubfile) = File::open(path).await &&
+            let Ok(mut privfile) = File::open(private_path).await {
+
+            let mut buf = Vec::new();
+            let bufread = pubfile.read_buf(&mut buf).await;
+        }
+    }
 
     loop {}
 }
@@ -199,7 +222,7 @@ async fn get_config() -> Result<Configuration, Box<dyn Error>> {
     Ok(toml::from_str::<Configuration>(&v)?)
 }
 
-/// Listens to messages from the temrinal UI
+/// Listens to messages from the terminal UI
 pub struct TerminalListener {
     pub send: Sender<InputChangeReq>,
     pub recv: Receiver<ActionExecution>,
@@ -227,7 +250,9 @@ impl TerminalListener {
     }
     pub async fn password(&mut self, q: String) -> Result<String, Box<dyn Error>> {
         // Send the password request
-        self.send.send(InputChangeReq::Input(q, ui::InputType::Password)).await?;
+        self.send
+            .send(InputChangeReq::Input(q, ui::InputType::Password))
+            .await?;
 
         let n = self.recv.recv().await.unwrap();
 
@@ -235,6 +260,10 @@ impl TerminalListener {
             ActionExecution::Input(s) => return Ok(s),
             ActionExecution::Select(_) => panic!(), // Shouldn't end up here
         }
+    }
+    pub async fn pass_hash(&mut self, q: String) -> Result<[u8; 32], Box<dyn Error>> {
+        let pass = self.password(q).await?;
+        Ok(hash_s(&pass))
     }
     pub async fn pass_key(&mut self, q: String) -> Result<Key<Aes256Gcm>, Box<dyn Error>> {
         let pass1 = self.password(q).await?;
