@@ -35,4 +35,4 @@ sequenceDiagram
 ```
 
 ## License
-This work is licensed under the [Apache 2.0](/LICENSE) and the [MIT](/LICENSE-MIT) license.
+This work is licensed under the [Apache 2.0](/LICENSE) or [MIT](/LICENSE-MIT) license at your option.
