@@ -30,7 +30,7 @@ pub enum ActionExecution {
 #[derive(Debug)]
 pub enum InputType {
     Password,
-    Text
+    Text,
 }
 #[derive(Debug)]
 pub enum InputChangeReq {
@@ -293,8 +293,6 @@ fn ui2<B: Backend>(f: &mut Frame<B>, app: &AppState) {
             p = Paragraph::new(spans);
         }
         InputMode::Input(title, value, input_type) => {
-            
-
             let mut text = Vec::new();
             text.push(Span::raw("      > "));
 
@@ -302,12 +300,20 @@ fn ui2<B: Backend>(f: &mut Frame<B>, app: &AppState) {
                 InputType::Text => {
                     text.extend(rainbowify(value));
                     match &app.select {
-                        Selected::Input => f.set_cursor(chunks[1].x + app.offset + 9, chunks[1].y + 3),
+                        Selected::Input => {
+                            f.set_cursor(chunks[1].x + app.offset + 9, chunks[1].y + 3)
+                        }
                         _ => {}
                     }
                 }
                 InputType::Password => {
-                    text.push(Span::styled("*", Style::default().bg(input_fg).fg(log_fg).add_modifier(Modifier::RAPID_BLINK)));
+                    text.push(Span::styled(
+                        "*",
+                        Style::default()
+                            .bg(input_fg)
+                            .fg(log_fg)
+                            .add_modifier(Modifier::RAPID_BLINK),
+                    ));
                 }
             }
 
