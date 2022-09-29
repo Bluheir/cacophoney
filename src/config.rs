@@ -45,6 +45,9 @@ pub struct SecretConfiguration {
     /// The password to unlock the certificate
     #[serde(default)]
     pub cert_password: Option<String>,
+    /// A password for client administrative privileges. If [`None`], no client can administrate the server.
+    #[serde(default)]
+    pub admin_pass : Option<[u8; 32]>
 }
 
 #[derive(Clone, Serialize, Deserialize)]
