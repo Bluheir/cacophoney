@@ -1,9 +1,9 @@
 use std::{collections::HashSet, error::Error, fmt::Display};
 
-use futures::{channel::mpsc, select, AsyncReadExt, FutureExt, StreamExt};
+use futures::{channel::mpsc, AsyncReadExt, FutureExt, StreamExt, io::{Take}, select_biased};
 use quinn::{NewConnection, RecvStream};
 
-use crate::data::{crypto::PubKey, Identifier, Message};
+use crate::data::{crypto::PubKey, Identifier, Message, StreamIdentify, MessageHeader};
 
 #[derive(Debug)]
 pub struct CancelError;
@@ -31,13 +31,13 @@ impl Client {
 
 pub struct ClientReceiver {
     canceller: mpsc::UnboundedReceiver<()>,
-    stream: RecvStream,
+    stream: Take<RecvStream>,
 }
 
 impl ClientReceiver {
     /// Creates a new client receiver
-    pub fn new(canceller: mpsc::UnboundedReceiver<()>, stream: RecvStream) -> Self {
-        Self { canceller, stream }
+    pub fn new(canceller: mpsc::UnboundedReceiver<()>, stream: RecvStream, max_bytes : u64) -> Self {
+        Self { canceller, stream : stream.take(max_bytes) }
     }
     /// Helper method to receive bytes and be cancellable by an unbounded receiver
     pub async fn receive(&mut self) -> Result<Message, Box<dyn Error>> {
@@ -48,11 +48,14 @@ impl ClientReceiver {
         // Reading from the receiver
         let mut fut2 = self.canceller.next().fuse();
 
-        select! {
-            v1 = fut1 => v1,
+        let read = select_biased! {
             // The receive was cancelled
-            _ = fut2 => return Err(Box::new(CancelError{}))
+            _ = fut2 => return Err(Box::new(CancelError{})),
+            // The read is completed
+            v1 = fut1 => v1
         }?;
+
+        buf.truncate(read);
 
         // Deserialize the bytes
         let a = serde_cbor::from_slice::<Message>(buf.as_ref())?;
@@ -66,14 +69,16 @@ pub async fn handle_connection(connection: NewConnection) -> Result<(), Box<dyn 
     // Create an unbounded channel that can cancel a receive
     let (_c_send, c_recv) = mpsc::unbounded();
     // Create a wrapper receiver
-    let mut receiver = ClientReceiver::new(c_recv, recv);
+    let mut client = Client::new(ClientReceiver::new(c_recv, recv, 32768));
 
-    while let Ok(msg) = receiver.receive().await {
+    while let Ok(msg) = client.receive.receive().await {
         match msg.header {
-            // 0: IDENTIFY HEADER
-            // The client identifies themselves with a public key, with a signature of the time hashed together with their IP address
-            0 => {
-                let _obj = serde_cbor::value::from_value::<Identifier>(msg.object);
+            // 0: STREAM IDENTIFY
+            // The client identifies the QUIC stream type
+            MessageHeader::StreamIdentify => {
+                let obj = serde_cbor::value::from_value::<StreamIdentify>(msg.object)?;
+
+                
             }
             _ => {}
         }
