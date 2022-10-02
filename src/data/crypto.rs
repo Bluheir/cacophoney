@@ -1,8 +1,8 @@
 use std::{error::Error, ops::Deref};
 
-use byteorder::{WriteBytesExt, LittleEndian};
+use byteorder::{LittleEndian, WriteBytesExt};
 use chrono::{DateTime, Utc};
-use libsecp256k1::{verify, Message, PublicKey, Signature, SecretKey};
+use libsecp256k1::{verify, Message, PublicKey, SecretKey, Signature};
 use serde::{de::Visitor, Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -106,9 +106,9 @@ impl<'de> Visitor<'de> for PubKeyVisitor {
         Ok(PubKey::new(v.try_into().unwrap()))
     }
     fn visit_unit<E>(self) -> Result<Self::Value, E>
-        where
-            E: serde::de::Error, {
-        
+    where
+        E: serde::de::Error,
+    {
         Ok(PubKey::default())
     }
 
@@ -120,20 +120,20 @@ impl<'de> Visitor<'de> for PubKeyVisitor {
 /// Wrapper around [`SecretKey`] with [`Serialize`] and [`Deserialize`] implementation
 #[derive(Copy, Clone)]
 pub struct PrivKey {
-    key : SecretKey,
+    key: SecretKey,
 }
 
 impl PrivKey {
-    pub fn new(key : [u8; 32]) -> Result<Self, libsecp256k1::Error> {
+    pub fn new(key: [u8; 32]) -> Result<Self, libsecp256k1::Error> {
         Ok(PrivKey {
-            key : SecretKey::parse(&key)?
+            key: SecretKey::parse(&key)?,
         })
     }
-    pub fn sign_hash(&self, msg : &[u8; 32]) -> [u8; 64] {
+    pub fn sign_hash(&self, msg: &[u8; 32]) -> [u8; 64] {
         let msg = libsecp256k1::Message::parse(msg);
         libsecp256k1::sign(&msg, &self.key).0.serialize()
     }
-    pub fn sign(&self, msg : &[u8]) -> [u8; 64] {
+    pub fn sign(&self, msg: &[u8]) -> [u8; 64] {
         self.sign_hash(blake3::hash(msg).as_bytes())
     }
 }
@@ -141,7 +141,8 @@ impl PrivKey {
 impl Serialize for PrivKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer {
+        S: serde::Serializer,
+    {
         serializer.serialize_bytes(&self.key.serialize())
     }
 }
@@ -180,7 +181,8 @@ impl<'de> Visitor<'de> for PrivKeyVisitor {
 impl<'de> Deserialize<'de> for PrivKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de> {
+        D: serde::Deserializer<'de>,
+    {
         deserializer.deserialize_bytes(PrivKeyVisitor)
     }
 }
@@ -188,30 +190,30 @@ impl<'de> Deserialize<'de> for PrivKey {
 /// A type for a signed message
 pub enum SigmsgType {
     /// A dummy message. Used for identifying public keys to clients and servers
-    Dummy = 0
+    Dummy = 0,
 }
 
-/// A message that can be serialized, hashed, then signed. 
+/// A message that can be serialized, hashed, then signed.
 /// Can also be constructed from other types and then verified from an existing signature.
 #[derive(Clone)]
 pub struct SignedMsg {
     /// Hashed message
-    hash : blake3::Hash
+    hash: blake3::Hash,
 }
 
 impl SignedMsg {
-    pub fn from_identity(sig_msg : &[u8; 32], timestamp : &DateTime<Utc>) -> Self {
+    pub fn from_identity(sig_msg: &[u8; 32], timestamp: &DateTime<Utc>) -> Self {
         let mut contents = Vec::new();
 
         // Write header byte
-        contents.write_u8(SigmsgType::Dummy as u8);
+        let _ = contents.write_u8(SigmsgType::Dummy as u8);
         // Write sig_msg
         contents.extend(sig_msg);
         // Write timestamp as millis. Always little endian.
-        contents.write_i64::<LittleEndian>(timestamp.timestamp_millis());
+        let _ = contents.write_i64::<LittleEndian>(timestamp.timestamp_millis());
 
         Self {
-            hash : blake3::hash(&contents)
+            hash: blake3::hash(&contents),
         }
     }
     /// Returns the hash of the converted message
@@ -219,10 +221,10 @@ impl SignedMsg {
         self.hash.as_bytes()
     }
     /// Verifies the message
-    pub fn verify(&self, key : &mut PubKey, sig : &[u8; 64]) -> Result<bool, Box<dyn Error>> {
+    pub fn verify(&self, key: &mut PubKey, sig: &[u8; 64]) -> Result<bool, Box<dyn Error>> {
         key.verify_hash(self.hash(), sig)
     }
-    pub fn sign(&self, key : &PrivKey) -> [u8; 64] {
+    pub fn sign(&self, key: &PrivKey) -> [u8; 64] {
         key.sign_hash(self.hash())
     }
 }
