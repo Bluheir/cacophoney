@@ -1,22 +1,32 @@
-use std::error::Error;
+use std::{error::Error, sync::Arc};
 
 use futures::{channel::mpsc, StreamExt};
 use quinn::{Endpoint, NewConnection, ServerConfig};
 
-use crate::{config::Configuration, db::DbApi, helpers::ip::parse_ip};
+use crate::{
+    config::Configuration,
+    db::{DbApi, EmptyDb},
+    helpers::ip::parse_ip,
+};
 
 use super::client::handle_connection;
+
+pub async fn start_empty(conf: Arc<Configuration>, server_config: ServerConfig) {
+    let mut node = NodeService::new(conf, EmptyDb {});
+
+    let _ = node.server(server_config).await;
+}
 
 /// Represents a QUIC node service running
 pub struct NodeService<T> {
     /// Configuration for the node service
-    config: Configuration,
+    config: Arc<Configuration>,
     /// Database manager for the node
     db: T,
 }
 
 impl<T> NodeService<T> {
-    pub fn new(config: Configuration, db: T) -> Self {
+    pub fn new(config: Arc<Configuration>, db: T) -> Self {
         Self { config, db }
     }
 }
