@@ -13,3 +13,5 @@ Cargo.lock
 /.vscode/
 
 /secrets/
+cert.pem
+key.pem
