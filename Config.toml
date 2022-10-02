@@ -3,20 +3,20 @@
 version = "0.1.0"
 # SSL needs to be configured before secure can be set to true
 secure = false
-
 # File path of the certificate
-# cert_path = "./cert.pem"
-
+cert_path = "./cert.pem"
 # Private key path of the certificate
-# private_key_path = "./private.pem"
+private_key_path = "./key.pem"
 
 # All the services of the server
 features = [
+    "base",
     "proxy", 
     "proxy/json5",
     
     # Recommended
     "proxy/json",
+
     "storage",
 ]
 
