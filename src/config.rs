@@ -2,13 +2,14 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Configuration {
     #[serde(default)]
     pub quic: NetworkConfiguration,
     #[serde(default)]
     pub proxy: NetworkConfiguration,
     #[serde(default)]
+    #[serde(rename = "main")]
     pub main_config: MainConfiguration,
     #[serde(default)]
     pub secret_config: SecretFileConfiguration,
@@ -47,7 +48,7 @@ pub struct SecretConfiguration {
     pub cert_password: Option<String>,
     /// A password for client administrative privileges. If [`None`], no client can administrate the server.
     #[serde(default)]
-    pub admin_pass : Option<[u8; 32]>
+    pub admin_pass: Option<[u8; 32]>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -76,15 +77,12 @@ pub struct MainConfiguration {
     pub features: HashSet<String>,
     /// The protocol version number, e.g 1.0.0
     pub version: String,
-    /// SSL needs to be configured before secure can be set to true
-    #[serde(default)]
-    pub secure: bool,
     /// File path of the certificate
     #[serde(default)]
-    pub cert_path: Option<String>,
+    pub cert_path: String,
     /// Private key path of the certificate
     #[serde(default)]
-    pub private_key_path: Option<String>,
+    pub private_key_path: String,
 }
 
 impl Default for MainConfiguration {
@@ -92,9 +90,8 @@ impl Default for MainConfiguration {
         Self {
             features: default_features(),
             version: default_version(),
-            secure: false,
-            cert_path: None,
-            private_key_path: None,
+            cert_path: default_pubkey(),
+            private_key_path: default_privkey(),
         }
     }
 }
@@ -108,6 +105,7 @@ fn default_port() -> u16 {
 fn default_features() -> HashSet<String> {
     HashSet::from_iter(
         vec![
+            "base".to_string(),
             "proxy".to_string(),
             "proxy/json5".to_string(),
             "proxy/json".to_string(), // Recommended
@@ -126,26 +124,33 @@ fn default_restart_key() -> bool {
     true
 }
 
+fn default_pubkey() -> String {
+    "./cert.pem".to_string()
+}
+fn default_privkey() -> String {
+    "./key.pem".to_string()
+}
+
 pub static DEFAULT_CONFIG: &str = r##"
 [main]
 # Do not change
 version = "0.1.0"
 # SSL needs to be configured before secure can be set to true
 secure = false
-
 # File path of the certificate
-# cert_path = "./cert.pem"
-
+cert_path = "./cert.pem"
 # Private key path of the certificate
-# private_key_path = "./private.pem"
+private_key_path = "./key.pem"
 
 # All the services of the server
 features = [
+    "base",
     "proxy", 
     "proxy/json5",
     
     # Recommended
     "proxy/json",
+    
     "storage",
 ]
 
