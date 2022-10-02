@@ -15,11 +15,11 @@ pub struct User {
 pub struct SubAccount {
     /// My public key
     pub pub_key: PubKey,
-    pub publicity : Publicity
+    pub publicity: Publicity,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum Publicity {
     Public,
-    Private
+    Private,
 }
