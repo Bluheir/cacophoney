@@ -19,7 +19,7 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Paragraph, Widget},
     Frame, Terminal,
 };
 
@@ -50,6 +50,7 @@ pub struct AppState {
     pub mode: InputMode,
     pub selected_input: u16,
     pub offset: u16,
+    pub log_msgs: Vec<Vec<(String, Style)>>,
 }
 pub enum Selected {
     Input,
@@ -76,11 +77,14 @@ pub fn render_loop<B: Backend>(
     ini_app: AppState,
     send: Sender<ActionExecution>,
     recv: Receiver<InputChangeReq>,
+    log_recv: Receiver<Vec<(String, Style)>>,
 ) -> io::Result<()> {
     let app = Arc::new(RwLock::new(ini_app));
     let c = app.clone();
+    let d = app.clone();
 
     thread::spawn(move || msg_loop(c, recv));
+    thread::spawn(move || log_loop(d, log_recv));
 
     let mut last_tick = Instant::now();
     let tick_rate = Duration::from_millis(100);
@@ -219,7 +223,13 @@ pub fn render_loop<B: Backend>(
         }
     }
 }
+fn log_loop(app: Arc<RwLock<AppState>>, mut recv: Receiver<Vec<(String, Style)>>) {
+    while let Some(t) = recv.blocking_recv() {
+        let mut w = app.write().unwrap();
 
+        w.log_msgs.push(t);
+    }
+}
 fn msg_loop(app: Arc<RwLock<AppState>>, mut recv: Receiver<InputChangeReq>) {
     while let Some(t) = recv.blocking_recv() {
         let mut w = app.write().unwrap();
@@ -249,12 +259,25 @@ fn ui2<B: Backend>(f: &mut Frame<B>, app: &AppState) {
     };
 
     let log_block = Block::default()
-        //;/*
         .borders(Borders::ALL)
         .border_style(Style::default().fg(log_fg))
         .title("Logs");
-    //*/
-    f.render_widget(log_block, chunks[0]);
+
+    let mut p = Paragraph::new(
+        app.log_msgs
+            .iter()
+            .map(|a| {
+                Spans::from(
+                    a.iter()
+                        .map(|b| Span::styled(b.0.clone(), b.1))
+                        .collect::<Vec<Span>>(),
+                )
+            })
+            .collect::<Vec<Spans>>(),
+    )
+    .block(log_block);
+
+    f.render_widget(p, chunks[0]);
 
     let input_block = Block::default()
         .borders(Borders::ALL)
@@ -367,6 +390,7 @@ fn rainbowify<'a>(s: &Vec<char>) -> Vec<Span<'a>> {
 pub fn terminal_init(
     send: Sender<ActionExecution>,
     recv: Receiver<InputChangeReq>,
+    log_recv: Receiver<Vec<(String, Style)>>,
 ) -> Result<(), Box<dyn Error>> {
     // setup terminal
     enable_raw_mode()?;
@@ -377,7 +401,7 @@ pub fn terminal_init(
 
     // create app and run it
     let app = AppState::default();
-    let res = render_loop(&mut terminal, app, send, recv);
+    let res = render_loop(&mut terminal, app, send, recv, log_recv);
 
     // restore terminal
     disable_raw_mode()?;
