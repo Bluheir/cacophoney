@@ -1,9 +1,9 @@
 use std::{collections::HashSet, error::Error, fmt::Display};
 
-use futures::{channel::mpsc, AsyncReadExt, FutureExt, StreamExt, io::{Take}, select_biased};
+use futures::{channel::mpsc, io::Take, select_biased, AsyncReadExt, FutureExt, StreamExt};
 use quinn::{NewConnection, RecvStream};
 
-use crate::data::{crypto::PubKey, Identifier, Message, StreamIdentify, MessageHeader};
+use crate::data::{crypto::PubKey, Identifier, Message, MessageHeader, StreamIdentify};
 
 #[derive(Debug)]
 pub struct CancelError;
@@ -36,8 +36,11 @@ pub struct ClientReceiver {
 
 impl ClientReceiver {
     /// Creates a new client receiver
-    pub fn new(canceller: mpsc::UnboundedReceiver<()>, stream: RecvStream, max_bytes : u64) -> Self {
-        Self { canceller, stream : stream.take(max_bytes) }
+    pub fn new(canceller: mpsc::UnboundedReceiver<()>, stream: RecvStream, max_bytes: u64) -> Self {
+        Self {
+            canceller,
+            stream: stream.take(max_bytes),
+        }
     }
     /// Helper method to receive bytes and be cancellable by an unbounded receiver
     pub async fn receive(&mut self) -> Result<Message, Box<dyn Error>> {
@@ -77,8 +80,6 @@ pub async fn handle_connection(connection: NewConnection) -> Result<(), Box<dyn 
             // The client identifies the QUIC stream type
             MessageHeader::StreamIdentify => {
                 let obj = serde_cbor::value::from_value::<StreamIdentify>(msg.object)?;
-
-                
             }
             _ => {}
         }
