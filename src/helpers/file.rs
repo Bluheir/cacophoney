@@ -1,15 +1,17 @@
 use std::error::Error;
 
 use aes_gcm::{
-    aead::{Aead, Nonce},
+    aead::{Aead},
     Aes256Gcm, KeyInit,
 };
 use generic_array::GenericArray;
 use serde::{de::DeserializeOwned, Serialize};
 use tokio::{
     fs::File,
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncWriteExt, AsyncReadExt},
 };
+
+use crate::error::ReadEncryptError;
 
 pub async fn get_toml<T: DeserializeOwned>(
     path: &str,
@@ -20,7 +22,7 @@ pub async fn get_toml<T: DeserializeOwned>(
     let mut f = match config {
         Ok(f) => f,
         Err(_) => {
-            log::info!("Creating TOML file at location {}", path);
+            tracing::info!("Creating TOML file at location {}", path);
             let mut f = File::create(path).await?;
 
             // Write default config
@@ -41,7 +43,7 @@ pub async fn read_encrypted<T: DeserializeOwned>(
     pass: &[u8; 32],
     nonce: &[u8; 12],
     cipher: &[u8],
-) -> Result<T, Box<dyn Error>> {
+) -> Result<T, ReadEncryptError> {
     let pass = GenericArray::from_slice(pass);
     let nonce = GenericArray::from_slice(nonce);
 
@@ -54,12 +56,12 @@ pub async fn encrypt<T: Serialize>(
     pass: &[u8; 32],
     nonce: &[u8; 12],
     data: &T,
-) -> Result<Vec<u8>, Box<dyn Error>> {
+) -> Vec<u8> {
     let pass = GenericArray::from_slice(pass);
     let nonce = GenericArray::from_slice(nonce);
 
     let d = Aes256Gcm::new(pass);
-    let p = serde_cbor::to_vec(data)?;
+    let p = serde_cbor::to_vec(data).unwrap();
 
-    Ok(d.encrypt(nonce, &*p)?)
+    d.encrypt(nonce, &*p).unwrap()
 }
